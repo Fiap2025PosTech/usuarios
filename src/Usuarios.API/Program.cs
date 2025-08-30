@@ -1,0 +1,251 @@
+var builder = WebApplication.CreateBuilder(args);
+var env = builder.Environment;
+
+// Add services to the container.
+builder.Services.AddEndpointsApiExplorer();
+
+builder.Configuration.AddJsonFile("appsettings.json", optional: true, reloadOnChange: true)
+                   .AddJsonFile($"appsettings.{env.EnvironmentName}.json", optional: true, reloadOnChange: true);
+
+var jwtKeyConfig = builder.Configuration["JWT:Key"];
+if (string.IsNullOrEmpty(jwtKeyConfig))
+    throw new InvalidOperationException("JWT:Key configuration is missing or empty.");
+
+    builder.Services.Configure<TokenConfiguration>(builder.Configuration.GetSection("JWT"));
+
+builder.Services.AddAuthentication(o =>
+{
+    o.DefaultScheme = JwtBearerDefaults.AuthenticationScheme;
+    o.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+})
+.AddJwtBearer(JwtBearerDefaults.AuthenticationScheme, o =>
+{
+    o.RequireHttpsMetadata = false;
+    o.SaveToken = true;
+    o.TokenValidationParameters = new TokenValidationParameters()
+    {
+        ValidateIssuerSigningKey = true,
+        IssuerSigningKey = new SymmetricSecurityKey(Convert.FromBase64String(jwtKeyConfig)),
+        RequireExpirationTime = true,
+        ValidateIssuer = false,
+        ValidateAudience = false,
+        ValidateLifetime = true
+    };
+});
+
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicyWithPermission(Policies.Admin, AccessLevel.Admin)
+           .AddPolicyWithPermission(Policies.User, AccessLevel.User)
+           .AddPolicyWithPermission(Policies.Guest, AccessLevel.Guest);
+}).AddAuthorizationBuilder();
+
+builder.Services.AddControllers(options => options.Filters.Add<UserFilter>()).AddNewtonsoftJson(options =>
+{
+    var settings = options.SerializerSettings;
+    settings.NullValueHandling = NullValueHandling.Ignore;
+    settings.FloatFormatHandling = FloatFormatHandling.DefaultValue;
+    settings.FloatParseHandling = FloatParseHandling.Double;
+    settings.ReferenceLoopHandling = ReferenceLoopHandling.Ignore;
+    settings.DateFormatString = "yyyy-MM-ddTHH:mm:ss";
+    settings.Culture = new CultureInfo("en-US");
+    settings.Converters.Add(new StringEnumConverter());
+    settings.ContractResolver = new DefaultContractResolver() { NamingStrategy = new SnakeCaseNamingStrategy() };
+});
+
+builder.Services.AddSwaggerGen(c =>
+{
+    c.SwaggerDoc("v1", new OpenApiInfo { Title = "FCGames API", Version = "v1" });
+
+    var xmlFile = $"{Assembly.GetExecutingAssembly().GetName().Name}.xml";
+    var xmlPath = Path.Combine(AppContext.BaseDirectory, xmlFile);
+    c.IncludeXmlComments(xmlPath);
+
+    c.CustomSchemaIds(type =>
+    {
+        var namingStrategy = new SnakeCaseNamingStrategy();
+        return namingStrategy.GetPropertyName(type.Name, false);
+    });
+
+    c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+    {
+        Description = "JWT Authorization Header - utilizado com Bearer Authentication. \r\n\r\n Insira 'Bearer' [espaço] e então seu token na caixa abaixo.\r\n\r\nExemplo: (informar sem as aspas): 'Bearer 1234sdfgsdf' ",
+        Name = "Authorization",
+        In = ParameterLocation.Header,
+        Type = SecuritySchemeType.ApiKey,
+        Scheme = "Bearer",
+        BearerFormat = "JWT"
+    });
+
+    c.AddSecurityRequirement(new OpenApiSecurityRequirement
+    {
+        {
+            new OpenApiSecurityScheme
+            {
+                Reference = new OpenApiReference
+                {
+                    Type = ReferenceType.SecurityScheme,
+                    Id = "Bearer"
+                }
+            },
+            Array.Empty<string>()
+        }
+    });
+});
+
+builder.Services.AddHealthChecks();
+
+builder.Services.AddAutoMapper((sp, cfg) =>
+{
+    cfg.AllowNullDestinationValues = true;
+    cfg.AllowNullCollections = true;
+    cfg.ConstructServicesUsing(sp.GetService);
+}, Assembly.GetAssembly(typeof(BaseModel)));
+
+builder.Logging.ClearProviders();
+builder.Logging.AddProvider(new CustomLoggerProvider(new CustomLoggerProviderConfiguration
+{
+    LogLevel = LogLevel.Information
+}));
+
+// Configuração de banco de dados baseada no provider
+builder.Services.AddDbContext<ApplicationDBContext>(options =>
+{
+    if (builder.Environment.IsProduction())
+    {
+        Console.WriteLine("Using PostgreSQL/Npgsql provider");
+        
+        var databaseUrl = Environment.GetEnvironmentVariable("DATABASE_URL");
+        if (string.IsNullOrEmpty(databaseUrl))
+            throw new InvalidOperationException("DATABASE_URL não está configurada.");
+
+        var databaseUri = new Uri(databaseUrl);
+        var userInfo = databaseUri.UserInfo.Split(':');
+
+        var builderDb = new NpgsqlConnectionStringBuilder
+        {
+            Host = databaseUri.Host,
+            Port = databaseUri.IsDefaultPort ? 5432 : databaseUri.Port,
+            Username = userInfo[0],
+            Password = userInfo[1],
+            Database = databaseUri.AbsolutePath.Trim('/'),
+            SslMode = SslMode.Require
+        };
+
+        options.UseNpgsql(builderDb.ToString(), x => 
+        {
+            x.MigrationsHistoryTable("__EFMigrationsHistory", "public");
+            x.MigrationsAssembly("FCGames.Infrastructure");
+        });
+    }
+    else
+    {
+        var provider = builder.Configuration["DatabaseProvider"] ?? "SqlServer";
+        Console.WriteLine($"Using {provider} provider");
+        
+        if (provider == "PostgreSql")
+        {
+            var connectionString = builder.Configuration.GetConnectionString("PostgreSql");
+            options.UseNpgsql(connectionString, x => 
+            {
+                x.MigrationsHistoryTable("__EFMigrationsHistory", "public");
+                x.MigrationsAssembly("FCGames.Infrastructure");
+            });
+            options.LogTo(message => Debug.WriteLine(message), LogLevel.Information);
+            options.EnableSensitiveDataLogging();
+        }
+        else
+        {
+            var connectionString = builder.Configuration.GetConnectionString("SqlServer");
+            options.UseSqlServer(connectionString, x => 
+            {
+                x.MigrationsHistoryTable("__EFMigrationsHistory", "dbo");
+                x.MigrationsAssembly("FCGames.Infrastructure");
+            });
+            options.LogTo(message => Debug.WriteLine(message), LogLevel.Information);
+            options.EnableSensitiveDataLogging();
+        }
+    }
+});
+
+builder.Services.AddMemoryCache();
+
+#region Repositories
+
+builder.Services.AddScoped<IUserRepository, UserRepository>();
+
+#endregion
+
+#region Services
+
+builder.Services.AddScoped<IUserService, UserService>();
+builder.Services.AddScoped<ITokenService, TokenService>();
+
+#endregion
+
+#region Application Services
+
+builder.Services.AddScoped<IUserApplicationService, UserApplicationService>();
+builder.Services.AddScoped<ITokenApplicationService, TokenApplicationService>();
+
+#endregion
+
+#region Authorization
+
+builder.Services.AddSingleton<IAuthorizationHandler, RolesAuthorizationHandler>();
+
+#endregion
+
+#region Filters
+
+builder.Services.AddScoped<IAuthorizationFilter, UserFilter>();
+builder.Services.AddScoped(x => new UserData());
+
+#endregion
+
+var app = builder.Build();
+
+app.UseHealthChecks("/health");
+app.UseHttpMetrics();
+app.MapMetrics();
+
+// Configure the HTTP request pipeline.
+if (app.Environment.IsDevelopment())
+{
+    app.UseSwagger();
+    app.UseSwaggerUI(c => c.SwaggerEndpoint("/swagger/v1/swagger.json", "FCGames API v1"));
+}
+
+using (var scope = app.Services.CreateScope())
+{
+    var services = scope.ServiceProvider;
+    var logger = services.GetRequiredService<ILogger<Program>>();
+
+    try
+    {
+        var context = services.GetRequiredService<ApplicationDBContext>();
+        
+        logger.LogInformation("Iniciando processo de migração do banco de dados...");
+        await MigrationHelper.RunMigrationsAsync(context);
+        logger.LogInformation("Migrações aplicadas com sucesso!");
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "Falha na operação do banco de dados: {Message}", ex.Message);
+        Console.WriteLine($"Erro no banco: {ex.Message}");
+        Console.WriteLine($"Exceção interna: {ex.InnerException?.Message}");
+
+        if (!app.Environment.IsProduction())
+        {
+            throw;
+        }
+    }
+}
+
+app.UseMiddleware<ErrorHandlingMiddleware>();
+
+app.UseHttpsRedirection();
+app.UseAuthorization();
+app.MapControllers();
+
+app.Run();
