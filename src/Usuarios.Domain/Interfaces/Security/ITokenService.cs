@@ -1,3 +1,5 @@
+using Usuarios.Domain.Entities;
+
 namespace Usuarios.Domain.Interfaces.Security;
 
 public interface ITokenService

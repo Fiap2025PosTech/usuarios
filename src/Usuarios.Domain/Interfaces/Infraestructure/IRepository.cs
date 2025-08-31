@@ -1,3 +1,6 @@
+using System.Linq.Expressions;
+using Usuarios.Domain.Entities.Interfaces;
+
 namespace Usuarios.Domain.Interfaces.Infraestructure;
 
 public interface IRepository<T> : IDisposable where T : class, IBaseEntity

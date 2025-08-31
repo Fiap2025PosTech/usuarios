@@ -1,3 +1,5 @@
+using Usuarios.Domain.Entities.Interfaces;
+
 namespace Usuarios.Domain.Entities;
 
 public class BaseEntity : Identifier, IBaseEntity

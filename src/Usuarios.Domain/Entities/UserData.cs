@@ -1,3 +1,5 @@
+using System.Security.Claims;
+
 namespace Usuarios.Domain.Entities;
 
 public class UserData : BaseEntity

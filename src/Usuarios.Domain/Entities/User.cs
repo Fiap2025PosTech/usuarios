@@ -1,3 +1,5 @@
+using Usuarios.Domain.Enums;
+
 namespace Usuarios.Domain.Entities;
 
 public class User : BaseEntity

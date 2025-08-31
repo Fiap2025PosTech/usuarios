@@ -1,3 +1,5 @@
+using Usuarios.Domain.Entities;
+
 namespace Usuarios.Domain.Interfaces.Infraestructure;
 
 public interface IUserRepository : IRepository<User>

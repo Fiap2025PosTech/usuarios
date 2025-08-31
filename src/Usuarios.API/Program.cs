@@ -1,3 +1,38 @@
+using System.Diagnostics;
+using System.Globalization;
+using System.Reflection;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc.Filters;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion.Internal;
+using Microsoft.IdentityModel.Tokens;
+using Microsoft.OpenApi.Models;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Converters;
+using Newtonsoft.Json.Serialization;
+using Npgsql;
+using Prometheus;
+using Usuarios.API.Authorization;
+using Usuarios.API.Constants;
+using Usuarios.API.Filters;
+using Usuarios.API.Logs;
+using Usuarios.API.Middlewares;
+using Usuarios.Application.Dto;
+using Usuarios.Application.Interfaces;
+using Usuarios.Application.Services;
+using Usuarios.Domain.Configuration;
+using Usuarios.Domain.Entities;
+using Usuarios.Domain.Enums;
+using Usuarios.Domain.Interfaces;
+using Usuarios.Domain.Interfaces.Infraestructure;
+using Usuarios.Domain.Interfaces.Security;
+using Usuarios.Domain.Services;
+using Usuarios.Domain.Services.Security;
+using Usuarios.Infrastructure.Data;
+using Usuarios.Infrastructure.Data.Repositories;
+using Usuarios.Infrastructure.Helpers;
+
 var builder = WebApplication.CreateBuilder(args);
 var env = builder.Environment;
 
@@ -109,7 +144,7 @@ builder.Logging.AddProvider(new CustomLoggerProvider(new CustomLoggerProviderCon
 }));
 
 // Configuração de banco de dados baseada no provider
-builder.Services.AddDbContext<ApplicationDBContext>(options =>
+builder.Services.AddDbContext<ApplicationDbContext>(options =>
 {
     if (builder.Environment.IsProduction())
     {
@@ -223,7 +258,7 @@ using (var scope = app.Services.CreateScope())
 
     try
     {
-        var context = services.GetRequiredService<ApplicationDBContext>();
+        var context = services.GetRequiredService<ApplicationDbContext>();
         
         logger.LogInformation("Iniciando processo de migração do banco de dados...");
         await MigrationHelper.RunMigrationsAsync(context);
