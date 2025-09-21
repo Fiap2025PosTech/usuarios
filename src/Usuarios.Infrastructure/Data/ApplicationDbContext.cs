@@ -27,7 +27,6 @@ public class ApplicationDbContext : DbContext
                 var connection = Database.GetDbConnection();
                 return connection.GetType().Name switch
                 {
-                    "SqlConnection" => "SqlServer",
                     "NpgsqlConnection" => "PostgreSql",
                     _ => "SqlServer"
                 };
@@ -48,7 +47,6 @@ public class ApplicationDbContext : DbContext
         return _provider switch
         {
             "PostgreSql" => "Migrations/PostgreSql",
-            "SqlServer" => "Migrations/SqlServer",
             "InMemory" => "Migrations/InMemory",
             _ => "Migrations/SqlServer"
         };

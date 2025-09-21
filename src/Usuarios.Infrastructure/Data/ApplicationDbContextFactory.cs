@@ -1,7 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
 using Microsoft.Extensions.Configuration;
@@ -14,7 +10,7 @@ public class ApplicationDbContextFactory : IDesignTimeDbContextFactory<Applicati
     {
         // Carrega a configuração do projeto API
         var configuration = new ConfigurationBuilder()
-            .SetBasePath(Path.Combine(Directory.GetCurrentDirectory(), "../FCGames.API"))
+            .SetBasePath(Path.Combine(Directory.GetCurrentDirectory(), "../Usuarios.API"))
             .AddJsonFile("appsettings.json", optional: false)
             .AddJsonFile("appsettings.Development.json", optional: true)
             .Build();
@@ -26,22 +22,11 @@ public class ApplicationDbContextFactory : IDesignTimeDbContextFactory<Applicati
 
         Console.WriteLine($"Using {provider} provider");
 
-        if (provider == "PostgreSql")
+        var connectionString = configuration.GetConnectionString("PostgreSql");
+        options.UseNpgsql(connectionString, x =>
         {
-            var connectionString = configuration.GetConnectionString("PostgreSql");
-            options.UseNpgsql(connectionString, x =>
-            {
-                x.MigrationsHistoryTable("__EFMigrationsHistory", "public");
-            });
-        }
-        else
-        {
-            var connectionString = configuration.GetConnectionString("SqlServer");
-            options.UseSqlServer(connectionString, x =>
-            {
-                x.MigrationsHistoryTable("__EFMigrationsHistory", "dbo");
-            });
-        }
+            x.MigrationsHistoryTable("__EFMigrationsHistory", "public");
+        });
 
         return new ApplicationDbContext(options.Options);
     }

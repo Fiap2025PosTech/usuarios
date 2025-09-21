@@ -1,7 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
 using Usuario.Tests.Shared.Fixtures.Entities;
 using Usuario.Tests.Shared.Fixtures.Utils;
 using Usuarios.Domain.Entities;

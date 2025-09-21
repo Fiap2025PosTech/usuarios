@@ -71,8 +71,8 @@ docker run -e "ACCEPT_EULA=Y" -e "SA_PASSWORD=@fiap2025" -p 1433:1433 --name Sql
 ### **Executar Migrations**
 
 ```bash
-dotnet ef migrations add "NomeDaMigration" --project Usuarios.Infrastructure --startup-project Usuarios.API
-dotnet ef database update --project Usuarios.Infrastructure --startup-project Usuarios.API
+dotnet ef migrations add "NomeDaMigration" --project src/Usuarios.Infrastructure --startup-project src/Usuarios.API
+dotnet ef database update --project src/Usuarios.Infrastructure --startup-project src/Usuarios.API
 ```
 
 ## Contribuição

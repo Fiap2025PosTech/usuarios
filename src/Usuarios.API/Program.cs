@@ -188,17 +188,6 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
             options.LogTo(message => Debug.WriteLine(message), LogLevel.Information);
             options.EnableSensitiveDataLogging();
         }
-        else
-        {
-            var connectionString = builder.Configuration.GetConnectionString("SqlServer");
-            options.UseSqlServer(connectionString, x => 
-            {
-                x.MigrationsHistoryTable("__EFMigrationsHistory", "dbo");
-                x.MigrationsAssembly("FCGames.Infrastructure");
-            });
-            options.LogTo(message => Debug.WriteLine(message), LogLevel.Information);
-            options.EnableSensitiveDataLogging();
-        }
     }
 });
 
