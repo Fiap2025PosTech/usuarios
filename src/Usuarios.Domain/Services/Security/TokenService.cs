@@ -50,7 +50,7 @@ public class TokenService(IOptions<TokenConfiguration> options, IMemoryCache cac
                 new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
                 new Claim(ClaimTypes.Name, user.Name ?? string.Empty),
                 new Claim(ClaimTypes.Email, user.Email ?? string.Empty),
-                new Claim(ClaimTypes.Role, ((int)user.AccessLevel).ToString())
+                new Claim(ClaimTypes.Role, user.AccessLevel.HasValue ? ((int)user.AccessLevel.Value).ToString() : string.Empty)
             ]),
             Expires = DateTime.UtcNow.AddHours(_configuration.ExpirationTimeHour),
             SigningCredentials = new SigningCredentials(new SymmetricSecurityKey(key), SecurityAlgorithms.HmacSha256Signature)

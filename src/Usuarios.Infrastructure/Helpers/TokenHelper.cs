@@ -84,18 +84,3 @@ public class TokenHelper
         return token;
     }
 }
-
-internal class SymmetricSecurityKey
-{
-  private byte[] bytes;
-
-  public SymmetricSecurityKey(byte[] bytes)
-  {
-    this.bytes = bytes;
-  }
-
-  public static implicit operator SecurityKey(SymmetricSecurityKey v)
-  {
-    throw new NotImplementedException();
-  }
-}

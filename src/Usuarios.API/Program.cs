@@ -45,7 +45,7 @@ var jwtKeyConfig = builder.Configuration["JWT:Key"];
 if (string.IsNullOrEmpty(jwtKeyConfig))
     throw new InvalidOperationException("JWT:Key configuration is missing or empty.");
 
-    builder.Services.Configure<TokenConfiguration>(builder.Configuration.GetSection("JWT"));
+builder.Services.Configure<TokenConfiguration>(builder.Configuration.GetSection("JWT"));
 
 builder.Services.AddAuthentication(o =>
 {
@@ -89,7 +89,7 @@ builder.Services.AddControllers(options => options.Filters.Add<UserFilter>()).Ad
 
 builder.Services.AddSwaggerGen(c =>
 {
-    c.SwaggerDoc("v1", new OpenApiInfo { Title = "FCGames API", Version = "v1" });
+    c.SwaggerDoc("v1", new OpenApiInfo { Title = "Usuarios API", Version = "v1" });
 
     var xmlFile = $"{Assembly.GetExecutingAssembly().GetName().Name}.xml";
     var xmlPath = Path.Combine(AppContext.BaseDirectory, xmlFile);
@@ -142,54 +142,8 @@ builder.Logging.AddProvider(new CustomLoggerProvider(new CustomLoggerProviderCon
     LogLevel = LogLevel.Information
 }));
 
-// Configuração de banco de dados baseada no provider
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
-{
-    if (builder.Environment.IsProduction())
-    {
-        Console.WriteLine("Using PostgreSQL/Npgsql provider");
-        
-        var databaseUrl = Environment.GetEnvironmentVariable("DATABASE_URL");
-        if (string.IsNullOrEmpty(databaseUrl))
-            throw new InvalidOperationException("DATABASE_URL não está configurada.");
-
-        var databaseUri = new Uri(databaseUrl);
-        var userInfo = databaseUri.UserInfo.Split(':');
-
-        var builderDb = new NpgsqlConnectionStringBuilder
-        {
-            Host = databaseUri.Host,
-            Port = databaseUri.IsDefaultPort ? 5432 : databaseUri.Port,
-            Username = userInfo[0],
-            Password = userInfo[1],
-            Database = databaseUri.AbsolutePath.Trim('/'),
-            SslMode = SslMode.Require
-        };
-
-        options.UseNpgsql(builderDb.ToString(), x => 
-        {
-            x.MigrationsHistoryTable("__EFMigrationsHistory", "public");
-            x.MigrationsAssembly("FCGames.Infrastructure");
-        });
-    }
-    else
-    {
-        var provider = builder.Configuration["DatabaseProvider"] ?? "SqlServer";
-        Console.WriteLine($"Using {provider} provider");
-        
-        if (provider == "PostgreSql")
-        {
-            var connectionString = builder.Configuration.GetConnectionString("PostgreSql");
-            options.UseNpgsql(connectionString, x => 
-            {
-                x.MigrationsHistoryTable("__EFMigrationsHistory", "public");
-                x.MigrationsAssembly("FCGames.Infrastructure");
-            });
-            options.LogTo(message => Debug.WriteLine(message), LogLevel.Information);
-            options.EnableSensitiveDataLogging();
-        }
-    }
-});
+    options.UseNpgsql(builder.Configuration.GetConnectionString("PostgreSql")));
 
 builder.Services.AddMemoryCache();
 
@@ -247,7 +201,7 @@ using (var scope = app.Services.CreateScope())
     try
     {
         var context = services.GetRequiredService<ApplicationDbContext>();
-        
+
         logger.LogInformation("Iniciando processo de migração do banco de dados...");
         await MigrationHelper.RunMigrationsAsync(context);
         logger.LogInformation("Migrações aplicadas com sucesso!");
