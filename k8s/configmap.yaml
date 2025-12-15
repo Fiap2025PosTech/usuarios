@@ -6,10 +6,10 @@ metadata:
   labels:
     app: users
 data:
-  ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT}
+  ASPNETCORE_ENVIRONMENT: "Production"
   ASPNETCORE_URLS: "http://+:80"
-  AWS__Region: ${AWS_REGION}
-  AWS__AccountId: ${AWS_ACCOUNT_ID}
+  AWS__Region: "us-east-1"
+  AWS__AccountId: "211125430602"
   DatabaseProvider: "PostgreSql"
   Jwt__ExpirationTimeHour: "5"
   Jwt__IncreaseExpirationTimeMinutes: "20"
