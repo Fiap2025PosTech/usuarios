@@ -1,0 +1,227 @@
+name: CI/CD - Build and Deploy to AWS EKS
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+env:
+  AWS_REGION: us-east-1
+  ECR_REPOSITORY: users-api
+  EKS_CLUSTER_NAME: users-cluster
+  K8S_NAMESPACE: users
+
+jobs:
+  build-and-deploy:
+    name: Build and Deploy to AWS EKS
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+        aws-region: ${{ env.AWS_REGION }}
+
+    - name: Login to Amazon ECR
+      id: login-ecr
+      uses: aws-actions/amazon-ecr-login@v2
+
+    - name: Get AWS Account ID
+      id: account
+      run: |
+        ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+        echo "account_id=$ACCOUNT_ID" >> $GITHUB_OUTPUT
+        echo "AWS Account ID: $ACCOUNT_ID"
+
+    - name: Build, tag, and push image to Amazon ECR
+      id: build-image
+      env:
+        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        IMAGE_TAG: ${{ github.sha }}
+      run: |
+        echo "🔨 Building Docker image..."
+        docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+        docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:latest
+        
+        echo "📤 Pushing to ECR..."
+        docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+        docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+        
+        echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
+        echo "✅ Image pushed: $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+
+    - name: Install kubectl
+      uses: azure/setup-kubectl@v3
+      with:
+        version: 'v1.28.0'
+
+    - name: Configure kubectl
+      run: |
+        echo "⚙️  Configuring kubectl for EKS..."
+        aws eks update-kubeconfig --name ${{ env.EKS_CLUSTER_NAME }} --region ${{ env.AWS_REGION }}
+        kubectl version --client
+        kubectl cluster-info
+
+    - name: Verify cluster access
+      run: |
+        echo "🔍 Verifying cluster access..."
+        kubectl get nodes
+        kubectl get namespaces
+
+    - name: Update ConfigMap with dynamic values
+      run: |
+        echo "📝 Updating ConfigMap..."
+        
+        # Substituir valores dinâmicos no ConfigMap
+        sed -i "s/\${ASPNETCORE_ENVIRONMENT}/Production/g" k8s/configmap.yaml
+        sed -i "s/\${AWS_REGION}/${{ env.AWS_REGION }}/g" k8s/configmap.yaml
+        sed -i "s/\${AWS_ACCOUNT_ID}/${{ steps.account.outputs.account_id }}/g" k8s/configmap.yaml
+        
+        # Mostrar preview do ConfigMap
+        echo "ConfigMap preview:"
+        cat k8s/configmap.yaml
+
+    - name: Create/Update Kubernetes Secrets
+      run: |
+        echo "🔐 Creating/Updating Kubernetes secrets..."
+        
+        # Criar namespace se não existir
+        kubectl create namespace ${{ env.K8S_NAMESPACE }} --dry-run=client -o yaml | kubectl apply -f -
+        
+        # Criar/atualizar secret
+        kubectl create secret generic users-secret \
+          --from-literal=ConnectionStrings__DefaultConnection="${{ secrets.DB_CONNECTION_STRING }}" \
+          --from-literal=Jwt__Key="${{ secrets.JWT_SECRET_KEY }}" \
+          --namespace=${{ env.K8S_NAMESPACE }} \
+          --dry-run=client -o yaml | kubectl apply -f -
+        
+        echo "✅ Secrets configured"
+
+    - name: Deploy to Kubernetes
+      run: |
+        echo "🚀 Deploying to Kubernetes..."
+        
+        # Aplicar manifests na ordem correta
+        kubectl apply -f k8s/namespace.yaml
+        kubectl apply -f k8s/configmap.yaml
+        kubectl apply -f k8s/deployment.yaml
+        kubectl apply -f k8s/service.yaml
+        kubectl apply -f k8s/hpa.yaml
+        
+        echo "✅ Manifests applied"
+
+    - name: Update deployment image
+      env:
+        IMAGE: ${{ steps.build-image.outputs.image }}
+      run: |
+        echo "🔄 Updating deployment with new image..."
+        
+        kubectl set image deployment/users-api \
+          users-api=${{ env.IMAGE }} \
+          -n ${{ env.K8S_NAMESPACE }}
+        
+        echo "✅ Image updated to: ${{ env.IMAGE }}"
+
+    - name: Wait for rollout
+      run: |
+        echo "⏳ Waiting for deployment rollout..."
+        kubectl rollout status deployment/users-api -n ${{ env.K8S_NAMESPACE }} --timeout=5m
+        echo "✅ Rollout completed successfully"
+
+    - name: Verify deployment
+      run: |
+        echo "🔍 Verifying deployment..."
+        
+        echo "📦 Pods:"
+        kubectl get pods -n ${{ env.K8S_NAMESPACE }} -l app=users-api
+        
+        echo ""
+        echo "📊 Deployment status:"
+        kubectl get deployment users-api -n ${{ env.K8S_NAMESPACE }}
+        
+        echo ""
+        echo "🔄 HPA status:"
+        kubectl get hpa -n ${{ env.K8S_NAMESPACE }}
+
+    - name: Get service URL
+      id: service-url
+      run: |
+        echo "🌐 Getting service URL..."
+        
+        # Aguardar LoadBalancer ficar pronto (timeout 5 min)
+        for i in {1..30}; do
+          EXTERNAL_IP=$(kubectl get svc users-service -n ${{ env.K8S_NAMESPACE }} -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || echo "")
+          
+          if [ -n "$EXTERNAL_IP" ]; then
+            echo "url=http://$EXTERNAL_IP" >> $GITHUB_OUTPUT
+            echo "✅ LoadBalancer URL: http://$EXTERNAL_IP"
+            echo "📖 Swagger: http://$EXTERNAL_IP/swagger"
+            echo "🏥 Health: http://$EXTERNAL_IP/health"
+            break
+          fi
+          
+          echo "⏳ Waiting for LoadBalancer... ($i/30)"
+          sleep 10
+        done
+        
+        if [ -z "$EXTERNAL_IP" ]; then
+          echo "⚠️  LoadBalancer not ready yet. Check later with:"
+          echo "kubectl get svc users-service -n ${{ env.K8S_NAMESPACE }}"
+        fi
+
+    - name: Show logs (last 50 lines)
+      if: always()
+      run: |
+        echo "📋 Recent logs from deployment:"
+        kubectl logs -n ${{ env.K8S_NAMESPACE }} -l app=users-api --tail=50 --prefix=true || echo "No logs available yet"
+
+    - name: Deployment summary
+      if: always()
+      run: |
+        echo "# 🚀 Deployment Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "## 📋 Details" >> $GITHUB_STEP_SUMMARY
+        echo "- **Branch:** \`${{ github.ref_name }}\`" >> $GITHUB_STEP_SUMMARY
+        echo "- **Commit:** \`${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
+        echo "- **Image:** \`${{ steps.build-image.outputs.image }}\`" >> $GITHUB_STEP_SUMMARY
+        echo "- **Cluster:** \`${{ env.EKS_CLUSTER_NAME }}\`" >> $GITHUB_STEP_SUMMARY
+        echo "- **Namespace:** \`${{ env.K8S_NAMESPACE }}\`" >> $GITHUB_STEP_SUMMARY
+        echo "- **Status:** ${{ job.status }}" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        
+        if [ -n "${{ steps.service-url.outputs.url }}" ]; then
+          echo "## 🌐 URLs" >> $GITHUB_STEP_SUMMARY
+          echo "- **API:** ${{ steps.service-url.outputs.url }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Swagger:** ${{ steps.service-url.outputs.url }}/swagger" >> $GITHUB_STEP_SUMMARY
+          echo "- **Health:** ${{ steps.service-url.outputs.url }}/health" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "## ⏳ LoadBalancer Pending" >> $GITHUB_STEP_SUMMARY
+          echo "Get URL with: \`kubectl get svc users-service -n users\`" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "## 📊 Kubernetes Resources" >> $GITHUB_STEP_SUMMARY
+        echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+        kubectl get all -n ${{ env.K8S_NAMESPACE }} >> $GITHUB_STEP_SUMMARY || echo "Unable to fetch resources" >> $GITHUB_STEP_SUMMARY
+        echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+
+    - name: Rollback on failure
+      if: failure()
+      run: |
+        echo "❌ Deployment failed! Rolling back..."
+        kubectl rollout undo deployment/users-api -n ${{ env.K8S_NAMESPACE }} || echo "⚠️  Unable to rollback"
+        
+        echo "📋 Current pod status:"
+        kubectl get pods -n ${{ env.K8S_NAMESPACE }} -l app=users-api
+        
+        echo ""
+        echo "📋 Recent events:"
+        kubectl get events -n ${{ env.K8S_NAMESPACE }} --sort-by='.lastTimestamp' | tail -20

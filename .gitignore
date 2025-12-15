@@ -13,4 +13,4 @@
 .vscode/
 
 # Rider
-.idea/
+.idea/k8s/secret.yaml
