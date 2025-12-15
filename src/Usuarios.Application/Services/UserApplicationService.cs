@@ -16,7 +16,7 @@ public class UserApplicationService(IUserService userService, IMapper mapper) : 
         var user = _mapper.Map<EN.User>(model);
 
         user = await _userService.Add(user);
-
+ 
         return _mapper.Map<User>(user);
     }
 }
