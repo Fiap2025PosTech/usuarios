@@ -17,19 +17,19 @@ public static class MigrationHelper
             var canConnect = await context.Database.CanConnectAsync();
             Console.WriteLine($"Pode conectar ao banco: {canConnect}...");
             
-            if (canConnect)
-            {
+            // if (canConnect)
+            // {
                 Console.WriteLine($"Aplicando migrações para {provider}...");
                 
                 // Aplicar migrações específicas do provider
                 await ApplyMigrationsForProvider(context, provider);
                 
                 Console.WriteLine("Migrações aplicadas com sucesso!");
-            }
-            else
-            {
-                Console.WriteLine("Não foi possível conectar ao banco de dados.");
-            }
+            // }
+            // else
+            // {
+            //     Console.WriteLine("Não foi possível conectar ao banco de dados.");
+            // }
         }
         catch (Exception ex)
         {
