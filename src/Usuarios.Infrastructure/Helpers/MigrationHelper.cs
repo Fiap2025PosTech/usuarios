@@ -9,6 +9,7 @@ public static class MigrationHelper
     {
         var provider = GetDatabaseProvider(context);
         Console.WriteLine($"Detectado provider: {provider}");
+        Console.WriteLine($"Detectado Database connection: {context.Database.GetDbConnection()}");
         
         try
         {

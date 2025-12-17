@@ -206,9 +206,9 @@ using (var scope = app.Services.CreateScope())
     {
         var context = services.GetRequiredService<ApplicationDbContext>();
 
-        // logger.LogInformation("Iniciando processo de migração do banco de dados...");
-        // await MigrationHelper.RunMigrationsAsync(context);
-        // logger.LogInformation("Migrações aplicadas com sucesso!");
+        logger.LogInformation("Iniciando processo de migração do banco de dados...");
+        await MigrationHelper.RunMigrationsAsync(context);
+        logger.LogInformation("Migrações aplicadas com sucesso!");
     }
     catch (Exception ex)
     {
