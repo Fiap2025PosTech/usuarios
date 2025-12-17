@@ -171,7 +171,7 @@ builder.Logging.AddProvider(new CustomLoggerProvider(new CustomLoggerProviderCon
 }));
 
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
-    options.UseNpgsql(builder.Configuration.GetConnectionString("PostgreSql")));
+    options.UseNpgsql(builder.Configuration.GetConnectionString("ConnectionStrings__PostgreSql")));
 
 builder.Services.AddMemoryCache();
 
