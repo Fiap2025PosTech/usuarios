@@ -87,6 +87,12 @@ spec:
             secretKeyRef:
               name: users-secret
               key: ConnectionStrings__DefaultConnection
+
+        - name: ConnectionStrings__PostgreSql
+          valueFrom:
+            secretKeyRef:
+              name: users-secret
+              key: ConnectionStrings__PostgreSql
         
         - name: Jwt__Key
           valueFrom:
