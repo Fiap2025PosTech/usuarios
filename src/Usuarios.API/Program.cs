@@ -42,6 +42,33 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Configuration.AddJsonFile("appsettings.json", optional: true, reloadOnChange: true)
                    .AddJsonFile($"appsettings.{env.EnvironmentName}.json", optional: true, reloadOnChange: true);
 
+
+// LOGS PARA VALIDACAO 
+
+Console.WriteLine("============================================");
+Console.WriteLine("=== VALIDAÇÃO DE CONNECTION STRING ===");
+Console.WriteLine("============================================");
+
+// 1. Verificar ENV
+var envConnStr = Environment.GetEnvironmentVariable("ConnectionStrings__PostgreSql");
+Console.WriteLine($"ENV ConnectionStrings__PostgreSql: {(envConnStr == null ? "NULL" : envConnStr.Length > 50 ? envConnStr[..50] + "..." : envConnStr)}");
+
+// 2. Verificar Configuration
+var configConnStr = builder.Configuration.GetConnectionString("PostgreSql");
+Console.WriteLine($"CONFIG GetConnectionString('PostgreSql'): {(configConnStr == null ? "NULL" : configConnStr.Length > 50 ? configConnStr[..50] + "..." : configConnStr)}");
+
+// 3. Listar todas as connection strings
+Console.WriteLine("Todas as ConnectionStrings:");
+var connStrings = builder.Configuration.GetSection("ConnectionStrings").GetChildren();
+foreach (var cs in connStrings)
+{
+    Console.WriteLine($"  - {cs.Key}: {(cs.Value == null ? "NULL" : cs.Value.Length > 50 ? cs.Value[..50] + "..." : cs.Value)}");
+}
+
+Console.WriteLine("============================================");
+
+// FIM DOS LOGS PARA VALIDACAO
+
 var jwtKeyConfig = builder.Configuration["Jwt:Key"];
 if (string.IsNullOrEmpty(jwtKeyConfig))
     throw new InvalidOperationException("Jwt:Key configuration is missing or empty.");
