@@ -65,6 +65,14 @@ foreach (var cs in connStrings)
     Console.WriteLine($"  - {cs.Key}: {(cs.Value == null ? "NULL" : cs.Value.Length > 50 ? cs.Value[..50] + "..." : cs.Value)}");
 }
 
+var connStr_Postgres = builder.Configuration.GetConnectionString("ConnectionStrings__PostgreSql");
+Console.WriteLine("aa ConnectionStrings__PostgreSql:" + connStr_Postgres);
+
+var connStr_Postgres2 = builder.Configuration.GetConnectionString("PostgreSql");
+Console.WriteLine("aa ConnectionStrings__PostgreSql:" + connStr_Postgres2);
+
+
+
 Console.WriteLine("============================================");
 
 // FIM DOS LOGS PARA VALIDACAO
