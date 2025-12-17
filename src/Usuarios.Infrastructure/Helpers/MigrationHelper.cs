@@ -8,13 +8,14 @@ public static class MigrationHelper
     public static async Task RunMigrationsAsync(ApplicationDbContext context)
     {
         var provider = GetDatabaseProvider(context);
-        Console.WriteLine($"Detectado provider: {provider}");
-        Console.WriteLine($"Detectado Database connection: {context.Database.GetDbConnection()}");
+        Console.WriteLine($"Detectado provider: {provider}...");
+        Console.WriteLine($"Detectado Database connection: {context.Database.GetDbConnection()}...");
+        Console.WriteLine($"Iniciando migrações para {context.Database.GetDbConnection().GetType().Name}...");
         
         try
         {
             var canConnect = await context.Database.CanConnectAsync();
-            Console.WriteLine($"Pode conectar ao banco: {canConnect}");
+            Console.WriteLine($"Pode conectar ao banco: {canConnect}...");
             
             if (canConnect)
             {
