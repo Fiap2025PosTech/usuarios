@@ -40,7 +40,8 @@ var env = builder.Environment;
 builder.Services.AddEndpointsApiExplorer();
 
 builder.Configuration.AddJsonFile("appsettings.json", optional: true, reloadOnChange: true)
-                   .AddJsonFile($"appsettings.{env.EnvironmentName}.json", optional: true, reloadOnChange: true);
+                   .AddJsonFile($"appsettings.{env.EnvironmentName}.json", optional: true, reloadOnChange: true)
+                   .AddEnvironmentVariables();
 
 
 // LOGS PARA VALIDACAO 
