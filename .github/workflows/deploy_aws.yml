@@ -10,7 +10,7 @@ on:
 env:
   # .NET Configuration
   DOTNET_VERSION: "8.0.x"
-  SOLUTION_FILE: "Usuarios.sln"
+  SOLUTION_FILE: "usuarios.sln"
   
   # AWS Configuration
   AWS_REGION: us-east-1
