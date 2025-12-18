@@ -259,65 +259,7 @@ kubectl get secret users-secret -n users -o jsonpath='{.data.Jwt__Key}' | base64
 
 ## Acesso ao Banco de Dados
 
-### **Inserir Usuário de Teste via kubectl**
-
-Execute o comando abaixo para criar um usuário de teste diretamente no RDS:
-
-```bash
-kubectl run psql-insert \
-  --image=postgres:15 \
-  --restart=Never \
-  --namespace=users \
-  --env="PGPASSWORD=YOUR_DB_PASSWORD" \
-  --rm -i -- bash -c '
-echo "DO \$\$
-DECLARE
-  new_user_id UUID := gen_random_uuid();
-BEGIN
-  INSERT INTO \"Users\" (
-    \"Id\",
-    \"Name\",
-    \"Email\",
-    \"Password\",
-    \"AccessLevel\",
-    \"CreatedAt\",
-    \"CreatedBy\",
-    \"Removed\",
-    \"UpdatedAt\",
-    \"UpdatedBy\"
-  )
-  VALUES (
-    new_user_id,
-    '\''admin.user'\'',
-    '\''admin@example.com'\'',
-    '\''@SecurePassword123'\'',
-    2,
-    NOW(),
-    new_user_id,
-    false,
-    NOW(),
-    new_user_id
-  );
-  RAISE NOTICE '\''Usuario criado com ID: %'\'', new_user_id;
-END \$\$;
-
-SELECT \"Id\"::TEXT, \"Name\", \"Email\", \"AccessLevel\"
-FROM \"Users\"
-WHERE \"Email\" = '\''admin@example.com'\'';" | \
-psql -h YOUR_RDS_ENDPOINT -U postgres -d users_db -p 5432
-'
-```
-
-**Importante:**
-
-- Substitua `YOUR_DB_PASSWORD` pela senha do banco
-- Substitua `YOUR_RDS_ENDPOINT` pelo endpoint do RDS
-- O comando cria um pod temporário, executa o SQL e remove o pod automaticamente (`--rm`)
-- O `AccessLevel` define o nível de acesso: `1` (User), `2` (Admin)
-
-### **Via kubectl exec (psql) - Alternativo**
-
-### **Via kubectl exec (psql) - Alternativo**
+### **Via kubectl exec (psql)**
 
 ```bash
 # Conectar ao pod
@@ -481,21 +423,119 @@ Atualize as credenciais:
 aws eks update-kubeconfig --region us-east-1 --name users-cluster
 ```
 
-## Monitoramento e Logs
+## Monitoramento com Prometheus e Grafana
 
-### **CloudWatch Logs**
+O projeto inclui stack completa de monitoramento com Prometheus e Grafana, deployados automaticamente no EKS.
 
-Os logs do cluster EKS são automaticamente enviados para o CloudWatch:
+### **Acessar os Serviços de Monitoramento**
 
 ```bash
-# Via AWS CLI
-aws logs tail /aws/eks/users-cluster/cluster --follow --region us-east-1
+# Obter URLs dos serviços
+kubectl get svc -n users
+
+# URL do Prometheus
+PROMETHEUS_URL=$(kubectl get svc prometheus -n users -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
+echo "Prometheus: http://$PROMETHEUS_URL:9090"
+
+# URL do Grafana
+GRAFANA_URL=$(kubectl get svc grafana -n users -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
+echo "Grafana: http://$GRAFANA_URL:3000"
+echo "Login: admin / admin"
 ```
+
+### **Prometheus (Coleta de Métricas)**
+
+**Acesso**: `http://<PROMETHEUS_URL>:9090`
+
+**Funcionalidades:**
+- `/targets` - Verificar status dos targets (pods da API)
+- `/graph` - Executar queries PromQL
+- `/metrics` - Métricas do próprio Prometheus
+
+**Queries PromQL Úteis:**
+
+```promql
+# Taxa de requisições HTTP
+sum(rate(http_requests_received_total{job="usuarios-api"}[5m]))
+
+# Latência p95
+histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{job="usuarios-api"}[5m])) by (le))
+
+# Requisições por status code
+sum by (code) (rate(http_requests_received_total{job="usuarios-api"}[5m]))
+
+# Uso de memória (MB)
+process_working_set_bytes{job="usuarios-api"} / 1024 / 1024
+
+# CPU usage (%)
+rate(process_cpu_seconds_total{job="usuarios-api"}[5m]) * 100
+
+# Pods ativos
+count(up{job="usuarios-api"} == 1)
+```
+
+### **Grafana (Dashboards Visuais)**
+
+**Acesso**: `http://<GRAFANA_URL>:3000`
+
+**Credenciais Padrão:**
+- **Usuário**: `admin`
+- **Senha**: `admin` (será solicitado trocar no primeiro acesso)
+
+**Dashboard Pré-configurado**: "Usuarios API - AWS EKS"
+
+**Painéis Disponíveis:**
+1. 📊 **Taxa de Requisições HTTP** - Requisições por segundo em tempo real
+2. ⏱️ **Latência HTTP (p95)** - Tempo de resposta percentil 95
+3. 🔢 **Requisições por Status Code** - Distribuição de códigos HTTP (200, 404, 500, etc)
+4. 🟢 **Pods Ativos** - Quantidade de pods rodando
+5. 💾 **Uso de Memória por Pod** - Consumo de memória em MB
+6. ⚡ **CPU Usage por Pod** - Uso de CPU em porcentagem
+7. 🔄 **Requisições em Progresso** - Requisições sendo processadas no momento
+8. 🧵 **Threads Ativas** - Número de threads por pod
+9. ❌ **Taxa de Erros (4xx/5xx)** - Erros do cliente e servidor
+10. 🔀 **Requisições por Método HTTP** - Gráfico pizza (GET, POST, PUT, DELETE)
+11. 📈 **Latência p50, p95, p99** - Comparação de percentis de latência
+
+### **Gerar Tráfego para Visualizar Métricas**
+
+```bash
+# Obter URL da API
+API_URL=$(kubectl get svc users-service -n users -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
+
+# Gerar requisições de teste
+for i in {1..50}; do
+  curl -s http://$API_URL/health > /dev/null
+  curl -s http://$API_URL/swagger > /dev/null
+  echo "✓ Request $i"
+  sleep 0.5
+done
+
+echo "✅ Aguarde 30 segundos e recarregue o Grafana"
+```
+
+### **Métricas Expostas pela API**
+
+A aplicação .NET expõe métricas via `/metrics` usando `prometheus-net.AspNetCore`:
+
+```bash
+# Ver métricas diretamente da API
+curl http://$API_URL/metrics
+```
+
+**Principais métricas:**
+- `http_requests_received_total` - Total de requisições HTTP
+- `http_request_duration_seconds` - Duração das requisições (histogram)
+- `http_requests_in_progress` - Requisições em andamento
+- `process_working_set_bytes` - Memória working set
+- `process_cpu_seconds_total` - Tempo total de CPU
+- `process_num_threads` - Número de threads
+- `dotnet_collection_count_total` - Contagem de garbage collections
 
 ### **Logs do Kubernetes**
 
 ```bash
-# Logs de todos os pods
+# Logs de todos os pods da API
 kubectl logs -n users -l app=users-api --tail=100 -f
 
 # Logs de um pod específico
@@ -503,16 +543,59 @@ kubectl logs -n users POD_NAME --tail=100 -f
 
 # Logs anteriores (se o pod reiniciou)
 kubectl logs -n users POD_NAME --previous
+
+# Logs do Prometheus
+kubectl logs -n users -l app=prometheus --tail=50
+
+# Logs do Grafana
+kubectl logs -n users -l app=grafana --tail=50
 ```
 
-### **Métricas**
+### **CloudWatch Logs**
 
 ```bash
-# Uso de recursos dos pods
-kubectl top pods -n users
+# Via AWS CLI
+aws logs tail /aws/eks/users-cluster/cluster --follow --region us-east-1
+```
 
-# Uso de recursos dos nodes
-kubectl top nodes
+### **Port-Forward (Acesso Local sem LoadBalancer)**
+
+Se preferir acessar localmente sem expor LoadBalancers:
+
+```bash
+# Prometheus
+kubectl port-forward -n users svc/prometheus 9090:9090
+# Acesse: http://localhost:9090
+
+# Grafana
+kubectl port-forward -n users svc/grafana 3000:3000
+# Acesse: http://localhost:3000
+
+# API
+kubectl port-forward -n users svc/users-service 8080:80
+# Acesse: http://localhost:8080/swagger
+```
+
+### **Alertas e Notificações**
+
+Para produção, configure alertas no Prometheus:
+
+```yaml
+# Exemplo de regra de alerta
+groups:
+  - name: usuarios-api
+    rules:
+      - alert: HighErrorRate
+        expr: sum(rate(http_requests_received_total{job="usuarios-api",code=~"5.."}[5m])) > 0.05
+        for: 5m
+        annotations:
+          summary: "Taxa alta de erros 5xx"
+      
+      - alert: HighLatency
+        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m])) > 1
+        for: 5m
+        annotations:
+          summary: "Latência p95 acima de 1 segundo"
 ```
 
 ## Custos Estimados AWS
@@ -524,9 +607,11 @@ Para ambiente de testes (AWS Academy ou Free Tier):
 | EKS Cluster        | -            | $73.00                |
 | EC2 (Worker Nodes) | t3.medium x2 | $60.00                |
 | RDS PostgreSQL     | db.t3.micro  | $15.00                |
-| LoadBalancer       | NLB          | $20.00                |
+| LoadBalancer (API) | NLB          | $20.00                |
+| LoadBalancer (Prometheus) | NLB   | $20.00                |
+| LoadBalancer (Grafana)    | NLB   | $20.00                |
 | ECR Storage        | <1GB         | $0.10                 |
-| **Total**    |              | **~$168/mês**  |
+| **Total**    |              | **~$208/mês**  |
 
 > ⚠️ **AWS Academy Labs**: Os recursos são reiniciados a cada sessão. Sempre atualize as credenciais.
 

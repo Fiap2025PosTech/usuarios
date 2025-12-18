@@ -42,12 +42,12 @@ metadata:
 data:
   usuarios-api.json: |
     {
-      "dashboard": {
-        "title": "Usuarios API - AWS EKS",
-        "tags": ["usuarios", "dotnet", "api", "aws", "eks"],
-        "timezone": "browser",
-        "editable": true,
-        "refresh": "10s",
+      "title": "Usuarios API - AWS EKS",
+      "tags": ["usuarios", "dotnet", "api", "aws", "eks"],
+      "timezone": "browser",
+      "editable": true,
+      "refresh": "10s",
+      "uid": "usuarios-api",
         "panels": [
           {
             "id": 1,
@@ -120,9 +120,121 @@ data:
                 "legendFormat": "{{pod}} - CPU %"
               }
             ]
+          },
+          {
+            "id": 7,
+            "title": "Requisições em Progresso",
+            "type": "stat",
+            "gridPos": { "h": 4, "w": 6, "x": 18, "y": 8 },
+            "targets": [
+              {
+                "expr": "sum(http_requests_in_progress{job=\"usuarios-api\"})",
+                "legendFormat": "In Progress"
+              }
+            ],
+            "options": {
+              "colorMode": "value",
+              "graphMode": "area",
+              "textMode": "auto"
+            },
+            "fieldConfig": {
+              "defaults": {
+                "thresholds": {
+                  "mode": "absolute",
+                  "steps": [
+                    { "color": "green", "value": null },
+                    { "color": "yellow", "value": 5 },
+                    { "color": "red", "value": 10 }
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "id": 8,
+            "title": "Threads Ativas",
+            "type": "graph",
+            "gridPos": { "h": 8, "w": 12, "x": 0, "y": 24 },
+            "targets": [
+              {
+                "expr": "process_num_threads{namespace=\"users\"}",
+                "legendFormat": "{{pod}} - Threads"
+              }
+            ]
+          },
+          {
+            "id": 9,
+            "title": "Taxa de Erros (4xx/5xx)",
+            "type": "graph",
+            "gridPos": { "h": 8, "w": 12, "x": 12, "y": 24 },
+            "targets": [
+              {
+                "expr": "sum by (code) (rate(http_requests_received_total{namespace=\"users\", code=~\"4..|5..\"}[5m]))",
+                "legendFormat": "HTTP {{code}}"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "color": { "mode": "palette-classic" }
+              },
+              "overrides": [
+                {
+                  "matcher": { "id": "byRegexp", "options": "/4.*/" },
+                  "properties": [{ "id": "color", "value": { "fixedColor": "yellow", "mode": "fixed" } }]
+                },
+                {
+                  "matcher": { "id": "byRegexp", "options": "/5.*/" },
+                  "properties": [{ "id": "color", "value": { "fixedColor": "red", "mode": "fixed" } }]
+                }
+              ]
+            }
+          },
+          {
+            "id": 10,
+            "title": "Requisições por Método HTTP",
+            "type": "piechart",
+            "gridPos": { "h": 8, "w": 12, "x": 0, "y": 32 },
+            "targets": [
+              {
+                "expr": "sum by (method) (rate(http_requests_received_total{namespace=\"users\"}[5m]))",
+                "legendFormat": "{{method}}"
+              }
+            ],
+            "options": {
+              "legend": {
+                "displayMode": "table",
+                "placement": "right",
+                "values": ["value", "percent"]
+              },
+              "pieType": "donut"
+            }
+          },
+          {
+            "id": 11,
+            "title": "Latência p50, p95, p99",
+            "type": "graph",
+            "gridPos": { "h": 8, "w": 12, "x": 12, "y": 32 },
+            "targets": [
+              {
+                "expr": "histogram_quantile(0.50, sum(rate(http_request_duration_seconds_bucket{namespace=\"users\"}[5m])) by (le))",
+                "legendFormat": "p50"
+              },
+              {
+                "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{namespace=\"users\"}[5m])) by (le))",
+                "legendFormat": "p95"
+              },
+              {
+                "expr": "histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket{namespace=\"users\"}[5m])) by (le))",
+                "legendFormat": "p99"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "unit": "s"
+              }
+            }
           }
         ]
-      }
     }
 ---
 apiVersion: apps/v1
