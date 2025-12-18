@@ -24,6 +24,9 @@ RUN dotnet publish "Usuarios.API.csproj" -c Release -o /app/publish \
 # Stage 2: Runtime (Alpine - muito mais leve)
 FROM mcr.microsoft.com/dotnet/aspnet:8.0-alpine AS runtime
 
+# Instala dependências ICU para globalização
+RUN apk add --no-cache icu-libs
+
 # Cria usuário não-root para segurança
 RUN addgroup -g 1000 appuser && adduser -u 1000 -G appuser -s /bin/sh -D appuser
 
