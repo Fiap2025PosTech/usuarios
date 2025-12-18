@@ -6,7 +6,6 @@
 ## Integrantes do Grupo
 
 - Saulo Szmyhiel Ganança
-- Rodrigo Vedovato
 - Leonardo Bernardes
 - Rodrigo Ferreira
 - Renato Ventura
@@ -126,6 +125,7 @@ EOF
 ### **2. Criar Recursos AWS**
 
 #### **EKS Cluster**
+
 ```bash
 aws eks create-cluster \
   --name users-cluster \
@@ -141,6 +141,7 @@ aws eks update-kubeconfig --region us-east-1 --name users-cluster
 ```
 
 #### **RDS PostgreSQL**
+
 ```bash
 aws rds create-db-instance \
   --db-instance-identifier users-db \
@@ -157,6 +158,7 @@ aws rds create-db-instance \
 ```
 
 #### **ECR Repository**
+
 ```bash
 aws ecr create-repository \
   --repository-name users-api \
@@ -187,6 +189,7 @@ git push origin main
 ```
 
 O workflow `.github/workflows/deploy_aws.yml` irá:
+
 1. Buildar a aplicação
 2. Executar os testes
 3. Criar imagem Docker otimizada (Alpine)
@@ -203,6 +206,7 @@ kubectl get service users-service -n users
 ```
 
 Acessar o Swagger:
+
 ```
 http://EXTERNAL-IP/swagger
 ```
@@ -305,6 +309,7 @@ psql -h YOUR_RDS_ENDPOINT -U postgres -d users_db -p 5432
 ```
 
 **Importante:**
+
 - Substitua `YOUR_DB_PASSWORD` pela senha do banco
 - Substitua `YOUR_RDS_ENDPOINT` pelo endpoint do RDS
 - O comando cria um pod temporário, executa o SQL e remove o pod automaticamente (`--rm`)
@@ -351,6 +356,7 @@ FROM "Users";
 O projeto utiliza Docker multi-stage build com Alpine Linux para minimizar o tamanho da imagem:
 
 **Otimizações:**
+
 - ✅ Imagem base Alpine (~70% menor que Debian)
 - ✅ Multi-stage build (SDK separado do runtime)
 - ✅ Usuário não-root para segurança
@@ -427,6 +433,7 @@ dotnet test --collect:"XPlat Code Coverage"
 ### **Erro: Connection Refused ao RDS**
 
 Verifique os Security Groups:
+
 ```bash
 # Security group do EKS deve ter acesso à porta 5432 do RDS
 aws ec2 authorize-security-group-ingress \
@@ -440,6 +447,7 @@ aws ec2 authorize-security-group-ingress \
 ### **Erro: Secrets vazios no Kubernetes**
 
 Recrie os secrets:
+
 ```bash
 kubectl delete secret users-secret -n users
 kubectl create secret generic users-secret \
@@ -452,6 +460,7 @@ kubectl create secret generic users-secret \
 ### **Erro: ICU Package Missing (Alpine)**
 
 O Dockerfile já inclui a instalação do `icu-libs`. Se ainda encontrar o erro:
+
 ```bash
 # Verificar se o pacote está instalado no container
 kubectl exec -it deployment/users-api -n users -- apk info | grep icu
@@ -460,6 +469,7 @@ kubectl exec -it deployment/users-api -n users -- apk info | grep icu
 ### **Token AWS Expirado (AWS Academy)**
 
 Atualize as credenciais:
+
 1. Abra o AWS Academy Lab
 2. Clique em "AWS Details"
 3. Copie as novas credenciais
@@ -509,14 +519,14 @@ kubectl top nodes
 
 Para ambiente de testes (AWS Academy ou Free Tier):
 
-| Recurso | Tipo | Custo Mensal (aprox.) |
-|---------|------|----------------------|
-| EKS Cluster | - | $73.00 |
-| EC2 (Worker Nodes) | t3.medium x2 | $60.00 |
-| RDS PostgreSQL | db.t3.micro | $15.00 |
-| LoadBalancer | NLB | $20.00 |
-| ECR Storage | <1GB | $0.10 |
-| **Total** | | **~$168/mês** |
+| Recurso            | Tipo         | Custo Mensal (aprox.) |
+| ------------------ | ------------ | --------------------- |
+| EKS Cluster        | -            | $73.00                |
+| EC2 (Worker Nodes) | t3.medium x2 | $60.00                |
+| RDS PostgreSQL     | db.t3.micro  | $15.00                |
+| LoadBalancer       | NLB          | $20.00                |
+| ECR Storage        | <1GB         | $0.10                 |
+| **Total**    |              | **~$168/mês**  |
 
 > ⚠️ **AWS Academy Labs**: Os recursos são reiniciados a cada sessão. Sempre atualize as credenciais.
 
