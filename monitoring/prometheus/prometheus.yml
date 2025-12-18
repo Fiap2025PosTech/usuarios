@@ -1,0 +1,17 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    monitor: 'usuarios-monitor'
+
+scrape_configs:
+  - job_name: 'usuarios-api'
+    static_configs:
+      - targets: ['api:8080']
+        labels:
+          application: 'usuarios-api'
+          environment: 'development'
+    
+    metrics_path: '/metrics'
+    scrape_interval: 10s
+    scrape_timeout: 5s

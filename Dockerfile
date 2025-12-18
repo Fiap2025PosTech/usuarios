@@ -16,7 +16,6 @@ COPY src/ .
 # Build e publish com otimizações
 WORKDIR /src/Usuarios.API
 RUN dotnet publish "Usuarios.API.csproj" -c Release -o /app/publish \
-    --no-restore \
     /p:UseAppHost=false \
     /p:PublishTrimmed=false \
     /p:PublishSingleFile=false

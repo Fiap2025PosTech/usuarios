@@ -244,6 +244,24 @@ jobs:
           kubectl apply -f k8s/service.yaml
 
       # ============================================
+      # DEPLOY MONITORING (PROMETHEUS + GRAFANA)
+      # ============================================
+      - name: Apply Prometheus
+        run: |
+          echo "📊 Deploying Prometheus..."
+          kubectl apply -f k8s/prometheus-config.yaml
+          kubectl apply -f k8s/prometheus-deployment.yaml
+          
+          echo "✅ Prometheus deployed"
+
+      - name: Apply Grafana
+        run: |
+          echo "📈 Deploying Grafana..."
+          kubectl apply -f k8s/grafana-deployment.yaml
+          
+          echo "✅ Grafana deployed"
+
+      # ============================================
       # WAIT FOR ROLLOUT
       # ============================================
       - name: Wait for deployment rollout
@@ -324,30 +342,44 @@ jobs:
       # ============================================
       # GET SERVICE URL
       # ============================================
-      - name: Get service URL
+      - name: Get service URLs
         id: service-url
         run: |
-          echo "🌐 Getting service URL..."
+          echo "🌐 Getting service URLs..."
           
-          # Aguardar LoadBalancer ficar pronto (timeout 5 min)
+          # API URL
           for i in {1..30}; do
-            EXTERNAL_IP=$(kubectl get svc users-service -n ${{ env.K8S_NAMESPACE }} -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || echo "")
+            API_URL=$(kubectl get svc users-service -n ${{ env.K8S_NAMESPACE }} -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || echo "")
             
-            if [ -n "$EXTERNAL_IP" ]; then
-              echo "url=http://$EXTERNAL_IP" >> $GITHUB_OUTPUT
-              echo "✅ LoadBalancer URL: http://$EXTERNAL_IP"
-              echo "📖 Swagger: http://$EXTERNAL_IP/swagger"
-              echo "🏥 Health: http://$EXTERNAL_IP/health"
+            if [ -n "$API_URL" ]; then
+              echo "url=http://$API_URL" >> $GITHUB_OUTPUT
+              echo "✅ API URL: http://$API_URL"
+              echo "📖 Swagger: http://$API_URL/swagger"
+              echo "🏥 Health: http://$API_URL/health"
               break
             fi
             
-            echo "⏳ Waiting for LoadBalancer... ($i/30)"
+            echo "⏳ Waiting for API LoadBalancer... ($i/30)"
             sleep 10
           done
           
-          if [ -z "$EXTERNAL_IP" ]; then
-            echo "⚠️  LoadBalancer not ready yet. Check later with:"
-            echo "kubectl get svc users-service -n ${{ env.K8S_NAMESPACE }}"
+          # Prometheus URL
+          PROMETHEUS_URL=$(kubectl get svc prometheus -n ${{ env.K8S_NAMESPACE }} -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || echo "")
+          if [ -n "$PROMETHEUS_URL" ]; then
+            echo "prometheus-url=http://$PROMETHEUS_URL:9090" >> $GITHUB_OUTPUT
+            echo "📊 Prometheus: http://$PROMETHEUS_URL:9090"
+          fi
+          
+          # Grafana URL
+          GRAFANA_URL=$(kubectl get svc grafana -n ${{ env.K8S_NAMESPACE }} -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || echo "")
+          if [ -n "$GRAFANA_URL" ]; then
+            echo "grafana-url=http://$GRAFANA_URL:3000" >> $GITHUB_OUTPUT
+            echo "📈 Grafana: http://$GRAFANA_URL:3000 (admin/admin)"
+          fi
+          
+          if [ -z "$API_URL" ]; then
+            echo "⚠️  LoadBalancers not ready yet. Check later with:"
+            echo "kubectl get svc -n ${{ env.K8S_NAMESPACE }}"
           fi
 
       # ============================================
@@ -372,6 +404,14 @@ jobs:
             echo "- **API:** ${{ steps.service-url.outputs.url }}" >> $GITHUB_STEP_SUMMARY
             echo "- **Swagger:** ${{ steps.service-url.outputs.url }}/swagger" >> $GITHUB_STEP_SUMMARY
             echo "- **Health:** ${{ steps.service-url.outputs.url }}/health" >> $GITHUB_STEP_SUMMARY
+            
+            if [ -n "${{ steps.service-url.outputs.prometheus-url }}" ]; then
+              echo "- **Prometheus:** ${{ steps.service-url.outputs.prometheus-url }}" >> $GITHUB_STEP_SUMMARY
+            fi
+            
+            if [ -n "${{ steps.service-url.outputs.grafana-url }}" ]; then
+              echo "- **Grafana:** ${{ steps.service-url.outputs.grafana-url }} (admin/admin)" >> $GITHUB_STEP_SUMMARY
+            fi
           else
             echo "## ⏳ LoadBalancer Pending" >> $GITHUB_STEP_SUMMARY
             echo "Get URL with: \`kubectl get svc users-service -n users\`" >> $GITHUB_STEP_SUMMARY

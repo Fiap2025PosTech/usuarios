@@ -1,0 +1,204 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-datasources
+  namespace: users
+data:
+  datasources.yaml: |
+    apiVersion: 1
+    datasources:
+    - name: Prometheus
+      type: prometheus
+      access: proxy
+      url: http://prometheus:9090
+      isDefault: true
+      jsonData:
+        timeInterval: 5s
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboards-config
+  namespace: users
+data:
+  dashboards.yaml: |
+    apiVersion: 1
+    providers:
+    - name: 'default'
+      orgId: 1
+      folder: ''
+      type: file
+      disableDeletion: false
+      updateIntervalSeconds: 10
+      allowUiUpdates: true
+      options:
+        path: /var/lib/grafana/dashboards
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboard-usuarios
+  namespace: users
+data:
+  usuarios-api.json: |
+    {
+      "dashboard": {
+        "title": "Usuarios API - AWS EKS",
+        "tags": ["usuarios", "dotnet", "api", "aws", "eks"],
+        "timezone": "browser",
+        "editable": true,
+        "refresh": "10s",
+        "panels": [
+          {
+            "id": 1,
+            "title": "Taxa de Requisições HTTP",
+            "type": "graph",
+            "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+            "targets": [
+              {
+                "expr": "rate(http_requests_received_total{namespace=\"users\"}[5m])",
+                "legendFormat": "{{pod}} - {{method}} {{route}}"
+              }
+            ]
+          },
+          {
+            "id": 2,
+            "title": "Latência das Requisições (p95)",
+            "type": "graph",
+            "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+            "targets": [
+              {
+                "expr": "histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{namespace=\"users\"}[5m]))",
+                "legendFormat": "{{pod}} - {{method}} {{route}}"
+              }
+            ]
+          },
+          {
+            "id": 3,
+            "title": "Requisições por Status Code",
+            "type": "graph",
+            "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+            "targets": [
+              {
+                "expr": "sum by (code) (rate(http_requests_received_total{namespace=\"users\"}[5m]))",
+                "legendFormat": "Status {{code}}"
+              }
+            ]
+          },
+          {
+            "id": 4,
+            "title": "Pods Ativos",
+            "type": "stat",
+            "gridPos": { "h": 4, "w": 6, "x": 12, "y": 8 },
+            "targets": [
+              {
+                "expr": "count(up{job=\"usuarios-api\"})",
+                "legendFormat": "Pods"
+              }
+            ]
+          },
+          {
+            "id": 5,
+            "title": "Uso de Memória por Pod",
+            "type": "graph",
+            "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+            "targets": [
+              {
+                "expr": "process_working_set_bytes{namespace=\"users\"} / 1024 / 1024",
+                "legendFormat": "{{pod}} - Working Set (MB)"
+              }
+            ]
+          },
+          {
+            "id": 6,
+            "title": "CPU Usage por Pod",
+            "type": "graph",
+            "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+            "targets": [
+              {
+                "expr": "rate(process_cpu_seconds_total{namespace=\"users\"}[5m]) * 100",
+                "legendFormat": "{{pod}} - CPU %"
+              }
+            ]
+          }
+        ]
+      }
+    }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: grafana
+  namespace: users
+  labels:
+    app: grafana
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: grafana
+  template:
+    metadata:
+      labels:
+        app: grafana
+    spec:
+      containers:
+      - name: grafana
+        image: grafana/grafana:latest
+        ports:
+        - name: web
+          containerPort: 3000
+        env:
+        - name: GF_SECURITY_ADMIN_USER
+          value: "admin"
+        - name: GF_SECURITY_ADMIN_PASSWORD
+          value: "admin"
+        - name: GF_USERS_ALLOW_SIGN_UP
+          value: "false"
+        - name: GF_INSTALL_PLUGINS
+          value: ""
+        volumeMounts:
+        - name: grafana-storage
+          mountPath: /var/lib/grafana
+        - name: grafana-datasources
+          mountPath: /etc/grafana/provisioning/datasources
+        - name: grafana-dashboards-config
+          mountPath: /etc/grafana/provisioning/dashboards
+        - name: grafana-dashboard-usuarios
+          mountPath: /var/lib/grafana/dashboards
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "250m"
+      volumes:
+      - name: grafana-storage
+        emptyDir: {}
+      - name: grafana-datasources
+        configMap:
+          name: grafana-datasources
+      - name: grafana-dashboards-config
+        configMap:
+          name: grafana-dashboards-config
+      - name: grafana-dashboard-usuarios
+        configMap:
+          name: grafana-dashboard-usuarios
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: grafana
+  namespace: users
+  labels:
+    app: grafana
+spec:
+  type: LoadBalancer
+  selector:
+    app: grafana
+  ports:
+  - name: web
+    protocol: TCP
+    port: 3000
+    targetPort: 3000

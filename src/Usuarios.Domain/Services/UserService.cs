@@ -31,4 +31,17 @@ public class UserService(IUserRepository userRepository, UserData userData) : Ba
     {
         return await _userRepository.GetByEmail(email);
     }
+
+    public async Task<User> AddAdmin(User entity)
+    {
+        var user = await _userRepository.GetByEmail(entity.Email);
+
+        if (user != null)
+            throw new ArgumentException("O usuário já existe.");
+
+        entity.SetAdminUser();
+        entity.PrepareToInsert(_userData.Id);
+
+        return await base.Add(entity);
+    }
 }

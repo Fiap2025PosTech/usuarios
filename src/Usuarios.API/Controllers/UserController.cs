@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Usuarios.API.Constants;
+using Usuarios.API.Filters;
 using Usuarios.Application.Dto;
 using Usuarios.Application.Interfaces;
 
@@ -24,6 +25,21 @@ public class UserController(ILogger<UserController> logger, IUserApplicationServ
     public async Task<object> Create([FromBody] GuestUser user)
     {
         var entity = await _userApplicationService.Add(user);
+        return Ok(entity);
+    }
+
+    /// <summary>
+    /// Criar um novo usuário
+    /// </summary>
+    /// <param name="user">Objeto com as propriedades para criar um novo usuário</param>
+    /// <returns>Um objeto do usuário criado</returns>
+    [HttpPost("admin")]
+    [Produces("application/json")]
+    [ProducesResponseType(typeof(User), StatusCodes.Status200OK)]
+    [SkipUserFilter]
+    public async Task<object> CreateAdmin([FromBody] GuestUser user)
+    {
+        var entity = await _userApplicationService.AddAdmin(user);
         return Ok(entity);
     }
 }

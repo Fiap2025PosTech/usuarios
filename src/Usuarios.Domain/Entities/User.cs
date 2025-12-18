@@ -12,4 +12,5 @@ public class User : BaseEntity
     public User() : base() { }
 
     public void SetDefaultUser() => AccessLevel = Enums.AccessLevel.User;
+    public void SetAdminUser() => AccessLevel = Enums.AccessLevel.Admin;
 }
